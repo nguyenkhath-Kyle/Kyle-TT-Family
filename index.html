@@ -1,0 +1,1659 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="SmartSpend">
+  <title>SmartSpend Pro - Kyle & TT Family</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #f1f5f9;
+      -webkit-tap-highlight-color: transparent;
+      margin: 0;
+      padding: 0;
+    }
+    .app-container {
+      max-width: 440px;
+      margin: 0 auto;
+      min-height: 100vh;
+      background: #f8fafc;
+      box-shadow: 0 10px 35px rgba(15, 23, 42, 0.1);
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      padding-bottom: calc(95px + env(safe-area-inset-bottom, 20px));
+    }
+    .header-safe {
+      padding-top: calc(1.25rem + env(safe-area-inset-top, 12px));
+    }
+    .bottom-nav-safe {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      max-width: 440px;
+      margin: 0 auto;
+      background: rgba(255, 255, 255, 0.98);
+      backdrop-filter: blur(12px);
+      border-top: 1px solid #e2e8f0;
+      padding-top: 8px;
+      padding-bottom: calc(10px + env(safe-area-inset-bottom, 16px));
+      padding-left: 12px;
+      padding-right: 12px;
+      display: flex;
+      justify-content: space-around;
+      align-items: center;
+      z-index: 9990;
+      box-shadow: 0 -4px 20px rgba(15, 23, 42, 0.06);
+    }
+    .tab-section { display: none; }
+    .tab-section.active { display: block; }
+    .badge-xs { font-size: 10px; }
+    .text-11 { font-size: 11px; }
+  </style>
+</head>
+<body>
+
+<!-- MÀN HÌNH KHÓA MÃ PIN -->
+<div id="pinLockOverlay" class="fixed inset-0 bg-slate-900 z-50 hidden flex-col items-center justify-center p-6 text-white">
+  <div class="w-16 h-16 rounded-3xl bg-indigo-600 flex items-center justify-center mb-4 shadow-lg">
+    <i class="fa-solid fa-lock text-2xl"></i>
+  </div>
+  <h2 class="text-lg font-extrabold">SmartSpend Pro Đang Khóa</h2>
+  <p class="text-xs text-slate-400 mt-1 mb-5 text-center">Nhập mã PIN bảo mật để mở sổ thu chi gia đình</p>
+  <input
+    type="password"
+    id="unlockPinInput"
+    inputmode="numeric"
+    maxlength="6"
+    placeholder="••••"
+    oninput="checkUnlockPin()"
+    class="w-48 px-4 py-3 rounded-2xl bg-slate-800 border border-slate-700 text-center text-2xl tracking-widest font-extrabold text-white focus:outline-none focus:border-indigo-500"
+  >
+  <p id="pinErrorMsg" class="text-xs text-rose-400 mt-3 hidden">Mã PIN chưa đúng, vui lòng thử lại!</p>
+</div>
+
+<div class="app-container">
+  <!-- HEADER & BỘ CHỌN THÁNG -->
+  <div class="bg-gradient-to-br from-indigo-600 via-indigo-700 to-purple-800 text-white px-5 pb-5 header-safe rounded-b-3xl shadow-lg">
+    <div class="flex justify-between items-center mb-3">
+      <div class="flex items-center space-x-2">
+        <span id="syncStatusBadge" class="bg-emerald-400 text-slate-950 badge-xs font-extrabold px-2 py-0.5 rounded-md uppercase flex items-center space-x-1">
+          <i class="fa-solid fa-baby mr-1"></i><span id="syncStatusText">KYLE & TT & HANNY</span>
+        </span>
+      </div>
+      <!-- Bộ chuyển đổi tháng & Nút làm mới đồng bộ -->
+      <div class="flex items-center space-x-2">
+        <button type="button" onclick="manualSyncCloud(true)" title="Đồng bộ ngay giữa Kyle & TT" class="bg-white/20 hover:bg-white/30 text-white p-1.5 rounded-xl text-xs transition flex items-center space-x-1">
+          <i class="fa-solid fa-rotate" id="syncSpinIcon"></i>
+          <span class="text-11 font-bold pr-0.5">Sync</span>
+        </button>
+        <div class="flex items-center bg-white/15 backdrop-blur-md rounded-xl px-2.5 py-1 space-x-2 border border-white/15">
+          <button type="button" onclick="changeMonth(-1)" class="hover:text-amber-300 px-1"><i class="fa-solid fa-chevron-left text-xs"></i></button>
+          <span id="currentMonthLabel" class="text-xs font-semibold text-center">Tháng 10/2026</span>
+          <button type="button" onclick="changeMonth(1)" class="hover:text-amber-300 px-1"><i class="fa-solid fa-chevron-right text-xs"></i></button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Thẻ Tổng quan Số dư Tháng -->
+    <div class="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/15">
+      <div class="flex justify-between items-baseline">
+        <span class="text-indigo-100 text-xs">Số dư khả dụng của gia đình</span>
+        <span id="allocationRatioBadge" class="text-11 bg-indigo-500/40 px-2.5 py-0.5 rounded-full font-medium">Quy tắc: 60/20/20</span>
+      </div>
+      <div id="totalBalance" class="text-3xl font-extrabold mt-1 tracking-tight">0 ₫</div>
+
+      <div class="grid grid-cols-3 gap-2 mt-3.5 pt-3 border-t border-white/15 text-xs">
+        <div>
+          <p class="text-indigo-200 text-11">Tổng Thu</p>
+          <p id="totalIncome" class="font-bold text-emerald-300 text-sm mt-0.5">0 ₫</p>
+        </div>
+        <div>
+          <p class="text-indigo-200 text-11">Tổng Chi</p>
+          <p id="totalExpense" class="font-bold text-rose-300 text-sm mt-0.5">0 ₫</p>
+        </div>
+        <div>
+          <p class="text-indigo-200 text-11">Tỷ lệ tích lũy</p>
+          <p id="savingRateLabel" class="font-bold text-amber-300 text-sm mt-0.5">0%</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- THANH CHUYỂN TAB TRÊN ĐẦU -->
+    <div class="grid grid-cols-4 gap-1.5 mt-3.5 bg-slate-900/25 p-1 rounded-2xl border border-white/10 text-xs">
+      <button type="button" id="top-home" onclick="switchTab('home')" class="py-1.5 rounded-xl font-bold bg-white text-indigo-700 shadow-xs transition">
+        Tổng quan
+      </button>
+      <button type="button" id="top-reports" onclick="switchTab('reports')" class="py-1.5 rounded-xl font-medium text-indigo-100 hover:bg-white/10 transition">
+        Báo cáo
+      </button>
+      <button type="button" id="top-allocation" onclick="switchTab('allocation')" class="py-1.5 rounded-xl font-medium text-indigo-100 hover:bg-white/10 transition">
+        Phân bổ
+      </button>
+      <button type="button" id="top-setup" onclick="switchTab('setup')" class="py-1.5 rounded-xl font-medium text-indigo-100 hover:bg-white/10 transition">
+        Cài đặt
+      </button>
+    </div>
+  </div>
+
+  <!-- KHU VỰC NHẬP NHANH 2 Ô (CHỌN KYLE HOẶC TT) -->
+  <div class="px-4 -mt-3 z-10">
+    <div class="bg-white rounded-2xl shadow-md border border-slate-100 p-4">
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-xs font-bold text-slate-700 uppercase tracking-wider">
+          <i class="fa-solid fa-bolt text-amber-500 mr-1"></i> Nhập Khoản Chi / Thu
+        </span>
+        <!-- Nút chọn người chi: Kyle / TT -->
+        <div class="flex items-center space-x-1">
+          <div class="flex items-center bg-slate-100 p-0.5 rounded-lg text-11 font-semibold">
+            <button type="button" id="btnPayerSelf" onclick="setPayer('self')" class="px-3 py-1 rounded-md bg-white text-indigo-600 shadow-xs transition font-bold">Kyle</button>
+            <button type="button" id="btnPayerPartner" onclick="setPayer('partner')" class="px-3 py-1 rounded-md text-slate-500 hover:text-slate-800 transition">TT</button>
+          </div>
+          <button type="button" onclick="openRenameModal()" title="Chỉnh sửa tên" class="text-slate-400 hover:text-indigo-600 p-1 text-xs">
+            <i class="fa-solid fa-pen-to-square"></i>
+          </button>
+        </div>
+      </div>
+
+      <form id="quickForm" onsubmit="handleQuickSubmit(event)" class="space-y-2.5">
+        <div class="grid grid-cols-12 gap-2">
+          <div class="col-span-7">
+            <input
+              type="text"
+              id="itemName"
+              placeholder="VD: Tã bỉm Hanny, Sữa, Tiêm ngừa..."
+              required
+              oninput="previewAllocation()"
+              class="w-full px-3 py-2.5 text-sm rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-indigo-500 focus:bg-white transition"
+            >
+          </div>
+          <div class="col-span-5">
+            <input
+              type="text"
+              id="itemAmount"
+              inputmode="text"
+              placeholder="Số tiền (450k, 1.2tr)"
+              required
+              oninput="previewAllocation()"
+              class="w-full px-3 py-2.5 text-sm rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-indigo-500 focus:bg-white transition font-semibold"
+            >
+          </div>
+        </div>
+
+        <div class="flex items-center justify-between">
+          <span id="livePreviewTag" class="text-11 font-medium px-2 py-0.5 rounded-md bg-slate-100 text-slate-500 truncate max-w-[230px]">
+            Gõ để tự phân loại...
+          </span>
+          <span id="activePayerTag" class="badge-xs text-indigo-600 font-bold bg-indigo-50 px-2 py-0.5 rounded">
+            Người chi: Kyle
+          </span>
+        </div>
+
+        <button
+          type="submit"
+          class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2.5 rounded-xl text-sm shadow-sm transition flex items-center justify-center space-x-2"
+        >
+          <i class="fa-solid fa-wand-magic-sparkles"></i>
+          <span>Tự Động Phân Bổ & Đồng Bộ Ngay</span>
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ================= TAB 1: TỔNG QUAN & SỔ GIAO DỊCH ================= -->
+  <div id="tab-home" class="tab-section active px-4 mt-4 space-y-5">
+    <!-- Trạng thái 3 Hũ -->
+    <div class="bg-white rounded-2xl p-4 border border-slate-100 shadow-xs">
+      <div class="flex justify-between items-center mb-3">
+        <div>
+          <h2 class="text-sm font-bold text-slate-800">Trạng Thái 3 Hũ Ngân Sách</h2>
+          <p class="text-11 text-slate-400">Các chi phí tã, sữa, học phí của bé tự động trừ vào Thiết Yếu</p>
+        </div>
+        <button type="button" onclick="switchTab('allocation')" class="text-xs text-indigo-600 font-semibold hover:underline">
+          Chi tiết Allocation →
+        </button>
+      </div>
+      <div id="bucketsContainer" class="space-y-2.5"></div>
+    </div>
+
+    <!-- Sổ Giao Dịch Đã Tự Phân Loại -->
+    <div class="bg-white rounded-2xl p-4 border border-slate-100 shadow-xs">
+      <div class="flex justify-between items-center mb-3">
+        <h2 class="text-sm font-bold text-slate-800">Lịch Sử Giao Dịch Tháng Này</h2>
+        <div class="flex space-x-1.5">
+          <select id="filterPayer" onchange="renderApp()" class="text-xs bg-slate-100 rounded-lg px-2 py-1.5 text-slate-700 font-medium focus:outline-none">
+            <option value="ALL">Tất cả người</option>
+            <option value="SELF" id="optPayerSelf">Kyle chi</option>
+            <option value="PARTNER" id="optPayerPartner">TT chi</option>
+          </select>
+          <select id="filterBucket" onchange="renderApp()" class="text-xs bg-slate-100 rounded-lg px-2 py-1.5 text-slate-700 font-medium focus:outline-none">
+            <option value="ALL">Tất cả hũ</option>
+            <option value="NEEDS">Thiết yếu</option>
+            <option value="WANTS">Linh hoạt</option>
+            <option value="SAVINGS">Tiết kiệm</option>
+            <option value="INCOME">Nguồn thu</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="mb-3">
+        <input
+          type="text"
+          id="searchTx"
+          oninput="renderApp()"
+          placeholder="Tìm nhanh khoản thu/chi (Hanny, sữa, bỉm...)..."
+          class="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-indigo-500"
+        >
+      </div>
+
+      <div id="transactionList" class="space-y-2"></div>
+    </div>
+  </div>
+
+  <!-- ================= TAB 2: BÁO CÁO THU CHI THEO THÁNG ================= -->
+  <div id="tab-reports" class="tab-section px-4 mt-4 space-y-4">
+    <!-- So sánh tỷ lệ chi giữa Kyle & TT -->
+    <div class="bg-white p-4 rounded-2xl border border-slate-100 shadow-xs">
+      <h3 class="text-sm font-bold text-slate-800 mb-1">Tỷ Lệ Chi Tiêu & Đóng Góp (Kyle vs TT)</h3>
+      <p class="text-11 text-slate-400 mb-3">Minh bạch dòng tiền trong tháng giữa hai vợ chồng</p>
+      <div id="payerComparisonBox" class="space-y-2 text-xs"></div>
+    </div>
+
+    <div class="grid grid-cols-2 gap-3">
+      <div class="bg-white p-3.5 rounded-2xl border border-slate-100 shadow-xs">
+        <p class="text-11 text-slate-400">Chi tiêu trung bình/ngày</p>
+        <p id="avgDailySpend" class="text-base font-extrabold text-slate-800 mt-0.5">0 ₫</p>
+      </div>
+      <div class="bg-white p-3.5 rounded-2xl border border-slate-100 shadow-xs">
+        <p class="text-11 text-slate-400">Danh mục chi lớn nhất</p>
+        <p id="topCategoryLabel" class="text-sm font-bold text-pink-600 mt-1 truncate">Chưa có</p>
+      </div>
+    </div>
+
+    <!-- Biểu đồ Xu hướng 6 Tháng -->
+    <div class="bg-white p-4 rounded-2xl border border-slate-100 shadow-xs">
+      <div class="flex justify-between items-center mb-3">
+        <div>
+          <h3 class="text-sm font-bold text-slate-800">Xu Hướng Thu - Chi Theo Tháng</h3>
+          <p class="text-11 text-slate-400">So sánh dòng tiền 6 tháng gần nhất</p>
+        </div>
+        <span class="text-11 font-semibold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md">6 Tháng</span>
+      </div>
+      <div class="h-52">
+        <canvas id="monthlyTrendChart"></canvas>
+      </div>
+    </div>
+
+    <!-- Biểu đồ tròn Danh mục (Bao gồm Bé Hanny) -->
+    <div class="bg-white p-4 rounded-2xl border border-slate-100 shadow-xs">
+      <h3 class="text-sm font-bold text-slate-800 mb-1">Cơ Cấu Chi Tiêu Gia Đình</h3>
+      <p class="text-11 text-slate-400 mb-3">Tự động gom nhóm tã, sữa, học phí của bé Hanny và sinh hoạt phí</p>
+      <div class="h-48 flex items-center justify-center">
+        <canvas id="categoryPieChart"></canvas>
+      </div>
+      <div id="categoryBreakdownList" class="mt-4 space-y-2 border-t border-slate-100 pt-3"></div>
+    </div>
+  </div>
+
+  <!-- ================= TAB 3: PHÂN BỔ NGÂN SÁCH (ALLOCATION MATRIX) ================= -->
+  <div id="tab-allocation" class="tab-section px-4 mt-4 space-y-4">
+    <div class="bg-white p-4 rounded-2xl border border-slate-100 shadow-xs">
+      <h3 class="text-sm font-bold text-slate-800 mb-1">Công Thức Tự Động Phân Bổ (Allocation)</h3>
+      <p class="text-11 text-slate-400 mb-3">Gia đình có con nhỏ thường nên chọn 60/20/20 hoặc 50/30/20:</p>
+      <div class="grid grid-cols-3 gap-2 text-xs">
+        <button type="button" onclick="applyPresetRatio(60,20,20)" class="p-2.5 rounded-xl border border-indigo-300 bg-indigo-50 text-indigo-700 font-bold text-center hover:bg-indigo-100 transition">
+          60 / 20 / 20
+          <span class="block badge-xs font-normal text-slate-600 mt-0.5">Khuyên dùng có con</span>
+        </button>
+        <button type="button" onclick="applyPresetRatio(50,30,20)" class="p-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-700 font-bold text-center hover:bg-slate-100 transition">
+          50 / 30 / 20
+          <span class="block badge-xs font-normal text-slate-500 mt-0.5">Cân bằng</span>
+        </button>
+        <button type="button" onclick="applyPresetRatio(50,20,30)" class="p-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-700 font-bold text-center hover:bg-slate-100 transition">
+          50 / 20 / 30
+          <span class="block badge-xs font-normal text-slate-500 mt-0.5">Tích lũy tương lai</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Biểu đồ Định mức vs Thực chi -->
+    <div class="bg-white p-4 rounded-2xl border border-slate-100 shadow-xs">
+      <h3 class="text-sm font-bold text-slate-800 mb-1">Định Mức Phân Bổ vs. Thực Tế Đã Dùng</h3>
+      <p class="text-11 text-slate-400 mb-3">Kiểm soát xem hũ nào đang bị lạm chi</p>
+      <div class="h-48">
+        <canvas id="allocationCompareChart"></canvas>
+      </div>
+    </div>
+
+    <!-- Bảng hạn mức an toàn/ngày -->
+    <div class="bg-white p-4 rounded-2xl border border-slate-100 shadow-xs">
+      <h3 class="text-sm font-bold text-slate-800 mb-3">Hạn Mức Chi An Toàn Còn Lại Mỗi Ngày</h3>
+      <div id="allocationSafeDailyList" class="space-y-3"></div>
+    </div>
+
+    <div class="bg-gradient-to-r from-indigo-50 to-purple-50 p-4 rounded-2xl border border-indigo-100">
+      <div class="flex items-start space-x-2.5">
+        <div class="w-8 h-8 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0 mt-0.5">
+          <i class="fa-solid fa-robot text-sm"></i>
+        </div>
+        <div>
+          <h4 class="text-xs font-bold text-indigo-950">Đánh giá Phân bổ Tự động</h4>
+          <p id="aiAllocationAdvice" class="text-xs text-slate-600 mt-1 leading-relaxed"></p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= TAB 4: MỤC CÀI ĐẶT & THIẾT LẬP ================= -->
+  <div id="tab-setup" class="tab-section px-4 mt-4 space-y-4">
+
+    <!-- MỤC 1: ĐỒNG BỘ 2 NGƯỜI / GIA ĐÌNH QUA ĐÁM MÂY -->
+    <div class="bg-gradient-to-br from-indigo-900 via-indigo-800 to-slate-900 text-white p-4 rounded-2xl shadow-md border border-indigo-700">
+      <div class="flex items-center justify-between mb-2">
+        <div class="flex items-center space-x-2">
+          <i class="fa-solid fa-cloud-bolt text-amber-400 text-lg"></i>
+          <h3 class="text-sm font-bold">1. Đồng Bộ Đám Mây Kyle & TT</h3>
+        </div>
+        <span id="cloudSyncStatusBadge" class="badge-xs px-2 py-0.5 rounded-full font-bold bg-slate-700 text-slate-300">Chưa bật</span>
+      </div>
+      <p class="text-xs text-indigo-200 leading-relaxed mb-3">
+        Chỉ cần nhập cùng một <b>Mã Gia Đình</b> (ví dụ: <code class="text-amber-300 bg-black/30 px-1.5 py-0.5 rounded font-mono">kyle-tt-hanny</code>) trên cả 2 điện thoại của Kyle & TT:
+      </p>
+
+      <div class="space-y-2.5 text-xs">
+        <div>
+          <label class="text-indigo-200 block mb-1">Mã Gia Đình Chung (viết liền không dấu):</label>
+          <input
+            type="text"
+            id="syncRoomInput"
+            placeholder="VD: kyle-tt-hanny hoặc nhakyle"
+            class="w-full px-3 py-2.5 rounded-xl bg-slate-800/90 border border-indigo-400/40 text-white font-mono text-sm focus:outline-none focus:border-amber-400"
+          >
+        </div>
+
+        <div class="grid grid-cols-2 gap-2 pt-1">
+          <button
+            type="button"
+            onclick="enableCloudSync()"
+            class="w-full bg-amber-400 hover:bg-amber-500 text-slate-950 font-bold py-2.5 rounded-xl transition shadow-sm flex items-center justify-center space-x-1.5"
+          >
+            <i class="fa-solid fa-link"></i>
+            <span>Kết Nối & Đồng Bộ</span>
+          </button>
+          <button
+            type="button"
+            onclick="disableCloudSync()"
+            class="w-full bg-white/10 hover:bg-white/20 text-indigo-200 font-semibold py-2.5 rounded-xl transition border border-white/10"
+          >
+            Tắt Đồng Bộ
+          </button>
+        </div>
+        <p id="lastSyncTimeText" class="text-11 text-indigo-300 text-center pt-1"></p>
+      </div>
+    </div>
+
+    <!-- MỤC 2: ĐỔI TÊN 2 NGƯỜI / THÀNH VIÊN -->
+    <div class="bg-white p-4 rounded-2xl border border-slate-100 shadow-xs">
+      <div class="flex items-center space-x-2 mb-2">
+        <i class="fa-solid fa-user-pen text-indigo-600"></i>
+        <h3 class="text-sm font-bold text-slate-800">2. Tên 2 Thành Viên Quản Lý</h3>
+      </div>
+      <p class="text-xs text-slate-500 mb-3">
+        Đã thiết lập sẵn <b>Kyle</b> và <b>TT</b>. Bạn vẫn có thể chỉnh lại bất kỳ lúc nào:
+      </p>
+      <div class="grid grid-cols-2 gap-2 text-xs">
+        <div>
+          <label class="font-semibold text-slate-600 block mb-1">Tên bạn:</label>
+          <input
+            type="text"
+            id="setupMyNameInput"
+            placeholder="VD: Kyle"
+            class="w-full px-3 py-2 border border-slate-200 rounded-xl font-bold text-indigo-600 focus:outline-none focus:border-indigo-500"
+          >
+        </div>
+        <div>
+          <label class="font-semibold text-slate-600 block mb-1">Tên người ấy:</label>
+          <input
+            type="text"
+            id="setupPartnerNameInput"
+            placeholder="VD: TT"
+            class="w-full px-3 py-2 border border-slate-200 rounded-xl font-bold text-purple-600 focus:outline-none focus:border-indigo-500"
+          >
+        </div>
+      </div>
+      <button
+        type="button"
+        onclick="saveCustomNames()"
+        class="w-full mt-3 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2.5 rounded-xl text-xs transition flex items-center justify-center space-x-1.5"
+      >
+        <i class="fa-solid fa-check"></i>
+        <span>Lưu Tên Mới</span>
+      </button>
+    </div>
+
+    <!-- MỤC 3: LƯU FILE VỀ MÁY OFFLINE -->
+    <div class="bg-white p-4 rounded-2xl border border-slate-100 shadow-xs">
+      <div class="flex items-center space-x-2 mb-1.5">
+        <i class="fa-solid fa-cloud-arrow-down text-indigo-600"></i>
+        <h3 class="text-sm font-bold text-slate-800">3. Lưu Dữ Liệu Về Máy (Offline Backup)</h3>
+      </div>
+      <p class="text-xs text-slate-500 mb-3">
+        Cất giữ dữ liệu trên máy riêng hoặc chuyển file sang iPhone/máy tính mới:
+      </p>
+      <div class="grid grid-cols-2 gap-2.5">
+        <button
+          type="button"
+          onclick="downloadBackupJSON()"
+          class="flex items-center justify-center space-x-1.5 py-2.5 px-3 rounded-xl bg-indigo-600 text-white font-semibold text-xs shadow-xs hover:bg-indigo-700 transition"
+        >
+          <i class="fa-solid fa-download"></i>
+          <span>Tải File (.JSON)</span>
+        </button>
+
+        <label class="flex items-center justify-center space-x-1.5 py-2.5 px-3 rounded-xl bg-indigo-50 text-indigo-700 font-semibold text-xs border border-indigo-200 hover:bg-indigo-100 cursor-pointer transition">
+          <i class="fa-solid fa-upload"></i>
+          <span>Khôi Phục Từ File</span>
+          <input type="file" id="restoreFileInput" accept=".json" onchange="restoreFromBackupJSON(event)" class="hidden">
+        </label>
+      </div>
+
+      <div class="grid grid-cols-2 gap-2.5 mt-2.5">
+        <button type="button" onclick="exportCSV()" class="flex items-center justify-center space-x-1.5 py-2 px-3 rounded-xl bg-emerald-50 text-emerald-700 font-semibold text-xs border border-emerald-200 hover:bg-emerald-100">
+          <i class="fa-solid fa-file-csv"></i>
+          <span>Xuất Excel (.CSV)</span>
+        </button>
+        <button type="button" onclick="loadDemoData()" class="flex items-center justify-center space-x-1.5 py-2 px-3 rounded-xl bg-slate-100 text-slate-700 font-semibold text-xs border border-slate-200 hover:bg-slate-200">
+          <i class="fa-solid fa-database"></i>
+          <span>Nạp Dữ Liệu Mẫu</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- MỤC 4: ĐẶT MÃ PIN BẢO MẬT -->
+    <div class="bg-white p-4 rounded-2xl border border-slate-100 shadow-xs">
+      <div class="flex items-center justify-between mb-1.5">
+        <div class="flex items-center space-x-2">
+          <i class="fa-solid fa-lock text-amber-500"></i>
+          <h3 class="text-sm font-bold text-slate-800">4. Khóa App Bằng Mã PIN</h3>
+        </div>
+        <span id="pinStatusBadge" class="badge-xs font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-500">Đang tắt</span>
+      </div>
+      <div class="flex space-x-2 text-xs">
+        <input
+          type="password"
+          id="newPinInput"
+          inputmode="numeric"
+          maxlength="6"
+          placeholder="Nhập PIN 4-6 số..."
+          class="flex-1 px-3 py-2 border border-slate-200 rounded-xl font-bold tracking-widest"
+        >
+        <button type="button" onclick="savePinCode()" class="bg-amber-500 hover:bg-amber-600 text-white font-bold px-4 py-2 rounded-xl transition">
+          Bật PIN
+        </button>
+        <button type="button" onclick="clearPinCode()" class="bg-slate-100 hover:bg-slate-200 text-slate-600 font-semibold px-3 py-2 rounded-xl transition">
+          Tắt
+        </button>
+      </div>
+    </div>
+
+    <!-- MỤC 5: TÙY CHỈNH TỶ LỆ HŨ -->
+    <div class="bg-white p-4 rounded-2xl border border-slate-100 shadow-xs">
+      <div class="flex items-center space-x-2 mb-2">
+        <i class="fa-solid fa-sliders text-indigo-600"></i>
+        <h3 class="text-sm font-bold text-slate-800">5. Tùy Chỉnh Tỷ Lệ Phân Bổ (Tổng = 100%)</h3>
+      </div>
+      <div class="grid grid-cols-3 gap-2.5 text-xs">
+        <div>
+          <label class="font-semibold text-slate-600 block mb-1">Thiết yếu (%)</label>
+          <input type="number" id="setupRatioNeeds" class="w-full px-3 py-2 border border-slate-200 rounded-xl font-bold text-blue-600">
+        </div>
+        <div>
+          <label class="font-semibold text-slate-600 block mb-1">Linh hoạt (%)</label>
+          <input type="number" id="setupRatioWants" class="w-full px-3 py-2 border border-slate-200 rounded-xl font-bold text-purple-600">
+        </div>
+        <div>
+          <label class="font-semibold text-slate-600 block mb-1">Tiết kiệm (%)</label>
+          <input type="number" id="setupRatioSavings" class="w-full px-3 py-2 border border-slate-200 rounded-xl font-bold text-amber-600">
+        </div>
+      </div>
+      <button type="button" onclick="saveCustomRatios()" class="w-full mt-3 bg-indigo-600 hover:bg-indigo-700 text-white py-2.5 rounded-xl font-semibold text-xs transition">
+        Lưu Tỷ Lệ Phân Bổ
+      </button>
+    </div>
+
+    <!-- MỤC 6: DẠY TỪ KHÓA RIÊNG -->
+    <div class="bg-white p-4 rounded-2xl border border-slate-100 shadow-xs">
+      <div class="flex items-center space-x-2 mb-2">
+        <i class="fa-solid fa-brain text-purple-600"></i>
+        <h3 class="text-sm font-bold text-slate-800">6. Thêm Từ Khóa Tự Phân Bổ Riêng</h3>
+      </div>
+      <div class="grid grid-cols-12 gap-2 text-xs">
+        <input type="text" id="customKeywordInput" placeholder="Từ khóa riêng (VD: sách cho hanny)" class="col-span-7 px-3 py-2 border border-slate-200 rounded-xl">
+        <select id="customKeywordBucket" class="col-span-5 px-2 py-2 border border-slate-200 rounded-xl font-medium">
+          <option value="NEEDS">Hũ Thiết yếu</option>
+          <option value="WANTS">Hũ Linh hoạt</option>
+          <option value="SAVINGS">Hũ Tiết kiệm</option>
+          <option value="INCOME">Khoản Thu</option>
+        </select>
+      </div>
+      <button type="button" onclick="addCustomKeywordRule()" class="w-full mt-2.5 bg-slate-800 hover:bg-slate-900 text-white py-2 rounded-xl font-semibold text-xs transition">
+        + Thêm Quy Tắc Từ Khóa
+      </button>
+      <div id="customRulesList" class="mt-3 flex flex-wrap gap-1.5"></div>
+    </div>
+
+    <!-- MỤC 7: VÙNG NGUY HIỂM -->
+    <div class="bg-rose-50/70 p-4 rounded-2xl border-2 border-rose-200">
+      <div class="flex items-center space-x-2 mb-1.5">
+        <i class="fa-solid fa-triangle-exclamation text-rose-600"></i>
+        <h3 class="text-sm font-bold text-rose-900">7. Vùng Nguy Hiểm (Reset Dữ Liệu Gốc)</h3>
+      </div>
+      <p class="text-xs text-rose-700 leading-relaxed mb-3">
+        Xóa sạch toàn bộ giao dịch trên máy về <b>0 ₫</b>. Cần nhập chữ <b>XOA</b> để xác nhận.
+      </p>
+      <button
+        type="button"
+        onclick="openSafeResetModal()"
+        class="w-full bg-rose-600 hover:bg-rose-700 text-white font-bold py-2.5 rounded-xl text-xs shadow-xs transition flex items-center justify-center space-x-2"
+      >
+        <i class="fa-solid fa-trash-can"></i>
+        <span>Xóa Hết Dữ Liệu & Nhập Lại Từ Đầu...</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- THANH ĐIỀU HƯỚNG 4 TAB CỐ ĐỊNH DƯỚI ĐÁY -->
+  <div class="bottom-nav-safe text-11">
+    <button type="button" id="nav-home" onclick="switchTab('home')" class="flex flex-col items-center text-indigo-600 font-bold py-1.5 px-3 rounded-xl bg-indigo-50/80">
+      <i class="fa-solid fa-wallet text-base mb-0.5"></i>
+      <span>Tổng quan</span>
+    </button>
+    <button type="button" id="nav-reports" onclick="switchTab('reports')" class="flex flex-col items-center text-slate-400 font-medium py-1.5 px-3 rounded-xl hover:text-indigo-600">
+      <i class="fa-solid fa-chart-column text-base mb-0.5"></i>
+      <span>Báo cáo</span>
+    </button>
+    <button type="button" id="nav-allocation" onclick="switchTab('allocation')" class="flex flex-col items-center text-slate-400 font-medium py-1.5 px-3 rounded-xl hover:text-indigo-600">
+      <i class="fa-solid fa-chart-pie text-base mb-0.5"></i>
+      <span>Phân bổ</span>
+    </button>
+    <button type="button" id="nav-setup" onclick="switchTab('setup')" class="flex flex-col items-center text-slate-400 font-medium py-1.5 px-3 rounded-xl hover:text-indigo-600">
+      <i class="fa-solid fa-gear text-base mb-0.5"></i>
+      <span>Cài đặt</span>
+    </button>
+  </div>
+</div>
+
+<!-- MODAL ĐỔI TÊN NHANH 1-CHẠM -->
+<div id="quickRenameModal" class="fixed inset-0 bg-slate-900/60 hidden items-center justify-center z-50 p-4">
+  <div class="bg-white rounded-3xl max-w-sm w-full p-5 shadow-2xl border border-indigo-100">
+    <div class="w-12 h-12 rounded-2xl bg-indigo-100 text-indigo-600 flex items-center justify-center mx-auto mb-3">
+      <i class="fa-solid fa-user-pen text-xl"></i>
+    </div>
+    <h3 class="font-extrabold text-slate-800 text-center text-base">Đổi Tên Thành Viên</h3>
+    <p class="text-xs text-slate-500 text-center mt-1 leading-relaxed">
+      Tên người chi hiển thị trên ứng dụng:
+    </p>
+    <div class="space-y-3 mt-4 text-xs">
+      <div>
+        <label class="font-semibold text-slate-700 block mb-1">Tên bạn:</label>
+        <input
+          type="text"
+          id="modalMyNameInput"
+          placeholder="VD: Kyle"
+          class="w-full px-3 py-2.5 rounded-xl border border-slate-200 font-bold text-indigo-600 focus:outline-none focus:border-indigo-500 text-sm"
+        >
+      </div>
+      <div>
+        <label class="font-semibold text-slate-700 block mb-1">Tên người ấy:</label>
+        <input
+          type="text"
+          id="modalPartnerNameInput"
+          placeholder="VD: TT"
+          class="w-full px-3 py-2.5 rounded-xl border border-slate-200 font-bold text-purple-600 focus:outline-none focus:border-indigo-500 text-sm"
+        >
+      </div>
+    </div>
+    <div class="grid grid-cols-2 gap-2.5 mt-5">
+      <button type="button" onclick="closeRenameModal()" class="py-2.5 rounded-xl bg-slate-100 text-slate-700 font-semibold text-xs hover:bg-slate-200">
+        Hủy
+      </button>
+      <button type="button" onclick="saveNamesFromModal()" class="py-2.5 rounded-xl bg-indigo-600 text-white font-bold text-xs hover:bg-indigo-700 transition">
+        Lưu Tên Ngay
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL XÁC NHẬN XÓA AN TOÀN -->
+<div id="safeResetModal" class="fixed inset-0 bg-slate-900/60 hidden items-center justify-center z-50 p-4">
+  <div class="bg-white rounded-3xl max-w-sm w-full p-5 shadow-2xl border border-rose-100">
+    <div class="w-12 h-12 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center mx-auto mb-3">
+      <i class="fa-solid fa-shield-halved text-xl"></i>
+    </div>
+    <h3 class="font-extrabold text-slate-800 text-center text-base">Xác Nhận Xóa Toàn Bộ Dữ Liệu</h3>
+    <p class="text-xs text-slate-500 text-center mt-1.5 leading-relaxed">
+      Gõ chính xác chữ <b class="text-rose-600">XOA</b> vào ô bên dưới rồi nhấn xác nhận:
+    </p>
+    <input
+      type="text"
+      id="confirmResetInput"
+      placeholder="Gõ chữ XOA vào đây..."
+      oninput="checkResetInput()"
+      class="w-full mt-3 px-3.5 py-2.5 text-center font-bold tracking-widest uppercase text-sm rounded-xl border-2 border-slate-200 focus:outline-none focus:border-rose-500"
+    >
+    <div class="grid grid-cols-2 gap-2.5 mt-4">
+      <button type="button" onclick="closeSafeResetModal()" class="py-2.5 rounded-xl bg-slate-100 text-slate-700 font-semibold text-xs hover:bg-slate-200">
+        Hủy Bỏ
+      </button>
+      <button
+        type="button"
+        id="confirmResetBtn"
+        onclick="executeFullReset()"
+        disabled
+        class="py-2.5 rounded-xl bg-rose-600 text-white font-bold text-xs opacity-40 cursor-not-allowed transition"
+      >
+        Xóa Sạch Về 0đ
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+  // DANH MỤC MAY ĐO CHO GIA ĐÌNH CÓ BÉ HANNY
+  const DEFAULT_RULES = [
+    { type: 'INCOME', bucket: 'INCOME', category: 'Thu nhập', icon: 'fa-sack-dollar', keywords: ['lương', 'luong', 'thưởng', 'thuong', 'thu nhập', 'freelance', 'lãi', 'hoàn tiền', 'bán đồ', 'cổ tức', 'nạp', 'phụ cấp'] },
+    { type: 'EXPENSE', bucket: 'NEEDS', category: 'Bé Hanny', icon: 'fa-baby', keywords: [
+      'hanny', 'tã', 'ta', 'bỉm', 'bim', 'sữa', 'sua', 'tiêm vaccine', 'tiem vaccine', 'vaccine', 'vắc xin', 'vacxin', 
+      'tiêm phòng', 'tiem phong', 'học phí', 'hoc phi', 'tiền học', 'tien hoc', 'mầm non', 'mam non', 'nhà trẻ', 'nha tre', 
+      'khám nhi', 'kham nhi', 'bác sĩ nhi', 'bình sữa', 'binh sua', 'ti giả', 'đồ chơi bé', 'đồ chơi hanny', 'quần áo bé', 'nhi đồng'
+    ]},
+    { type: 'EXPENSE', bucket: 'SAVINGS', category: 'Tiết kiệm & Đầu tư', icon: 'fa-piggy-bank', keywords: [
+      'tiết kiệm', 'tiet kiem', 'đầu tư', 'dau tu', 'chứng khoán', 'cổ phiếu', 'vàng', 'quỹ', 'gửi góp', 'quỹ cho con', 'bảo hiểm nhân thọ', 'sổ tiết kiệm'
+    ]},
+    { type: 'EXPENSE', bucket: 'NEEDS', category: 'Ăn uống & Đi chợ', icon: 'fa-utensils', keywords: [
+      'cơm', 'com', 'phở', 'pho', 'bún', 'bun', 'mì', 'chợ', 'cho', 'siêu thị', 'sieu thi', 'winmart', 'bach hoa xanh', 
+      'coopmart', 'ăn sáng', 'ăn trưa', 'ăn tối', 'thịt', 'rau', 'gạo', 'trái cây', 'đồ ăn gia đình'
+    ]},
+    { type: 'EXPENSE', bucket: 'NEEDS', category: 'Di chuyển & Xăng xe', icon: 'fa-gas-pump', keywords: [
+      'xăng', 'xang', 'grab', 'be', 'taxi', 'gửi xe', 'gui xe', 'bảo dưỡng', 'thay nhớt', 'rửa xe', 'vé xe', 'cầu đường'
+    ]},
+    { type: 'EXPENSE', bucket: 'NEEDS', category: 'Hóa đơn & Nhà cửa', icon: 'fa-file-invoice-dollar', keywords: [
+      'tiền nhà', 'thuê nhà', 'điện', 'dien', 'nước', 'nuoc', 'wifi', 'internet', '4g', 'viettel', 'rác', 'phí quản lý', 'phí chung cư'
+    ]},
+    { type: 'EXPENSE', bucket: 'NEEDS', category: 'Y tế & Sức khỏe', icon: 'fa-notes-medical', keywords: [
+      'thuốc', 'thuoc', 'khám bệnh', 'bệnh viện', 'nha khoa', 'bảo hiểm y tế', 'vitamin', 'khẩu trang'
+    ]},
+    { type: 'EXPENSE', bucket: 'WANTS', category: 'Cà phê & Hò hẹn', icon: 'fa-mug-hot', keywords: [
+      'cafe', 'cà phê', 'ca phe', 'trà sữa', 'tra sua', 'highland', 'starbucks', 'phúc long', 'katinat', 'hẹn hò', 'an vat', 'ăn vặt'
+    ]},
+    { type: 'EXPENSE', bucket: 'WANTS', category: 'Mua sắm & Giải trí', icon: 'fa-bag-shopping', keywords: [
+      'shopee', 'lazada', 'tiktok', 'quần áo bố mẹ', 'giày', 'mỹ phẩm', 'xem phim', 'netflix', 'spotify', 'game', 'du lịch', 'quà tặng', 'sinh nhật', 'làm tóc', 'spa'
+    ]}
+  ];
+
+  const SAMPLE_TRANSACTIONS = [
+    { id: 101, name: 'Lương tháng Kyle', amount: 32000000, payer: 'Kyle', type: 'INCOME', bucket: 'INCOME', category: 'Thu nhập', icon: 'fa-sack-dollar', month: '2026-10', timestamp: '05/10, 09:00' },
+    { id: 102, name: 'Lương tháng TT', amount: 26000000, payer: 'TT', type: 'INCOME', bucket: 'INCOME', category: 'Thu nhập', icon: 'fa-sack-dollar', month: '2026-10', timestamp: '05/10, 10:30' },
+    { id: 103, name: 'Tiền học phí mầm non Hanny', amount: 6500000, payer: 'Kyle', type: 'EXPENSE', bucket: 'NEEDS', category: 'Bé Hanny', icon: 'fa-baby', month: '2026-10', timestamp: '06/10, 08:30' },
+    { id: 104, name: 'Tã bỉm Merries & Sữa công thức cho Hanny', amount: 2450000, payer: 'TT', type: 'EXPENSE', bucket: 'NEEDS', category: 'Bé Hanny', icon: 'fa-baby', month: '2026-10', timestamp: '07/10, 15:20' },
+    { id: 105, name: 'Tiêm vaccine 6in1 cho Hanny tại VNVC', amount: 1100000, payer: 'Kyle', type: 'EXPENSE', bucket: 'NEEDS', category: 'Bé Hanny', icon: 'fa-baby', month: '2026-10', timestamp: '09/10, 09:45' },
+    { id: 106, name: 'Đi chợ & Siêu thị thực phẩm cả tuần', amount: 2800000, payer: 'TT', type: 'EXPENSE', bucket: 'NEEDS', category: 'Ăn uống & Đi chợ', icon: 'fa-utensils', month: '2026-10', timestamp: '10/10, 17:30' },
+    { id: 107, name: 'Tiền điện nước & Phí quản lý chung cư', amount: 3200000, payer: 'Kyle', type: 'EXPENSE', bucket: 'NEEDS', category: 'Hóa đơn & Nhà cửa', icon: 'fa-file-invoice-dollar', month: '2026-10', timestamp: '12/10, 11:00' },
+    { id: 108, name: 'Gửi tiết kiệm tích lũy tương lai Hanny', amount: 12000000, payer: 'Kyle', type: 'EXPENSE', bucket: 'SAVINGS', category: 'Tiết kiệm & Đầu tư', icon: 'fa-piggy-bank', month: '2026-10', timestamp: '14/10, 14:00' },
+    { id: 109, name: 'Cà phê & Ăn sáng cuối tuần cả nhà', amount: 480000, payer: 'TT', type: 'EXPENSE', bucket: 'WANTS', category: 'Cà phê & Hò hẹn', icon: 'fa-mug-hot', month: '2026-10', timestamp: '18/10, 09:15' }
+  ];
+
+  let rawSaved = null;
+  try {
+    rawSaved = JSON.parse(localStorage.getItem('SMARTSPEND_STATE'));
+  } catch (err) {
+    rawSaved = null;
+  }
+
+  let state = {
+    currentMonth: (rawSaved && rawSaved.currentMonth) ? rawSaved.currentMonth : '2026-10',
+    pinCode: (rawSaved && rawSaved.pinCode) ? rawSaved.pinCode : '',
+    ratios: (rawSaved && rawSaved.ratios) ? rawSaved.ratios : { NEEDS: 60, WANTS: 20, SAVINGS: 20 },
+    customRules: (rawSaved && Array.isArray(rawSaved.customRules)) ? rawSaved.customRules : [],
+    syncRoom: (rawSaved && rawSaved.syncRoom) ? rawSaved.syncRoom : '',
+    myPayerName: (rawSaved && rawSaved.myPayerName && rawSaved.myPayerName !== 'Tôi') ? rawSaved.myPayerName : 'Kyle',
+    partnerPayerName: (rawSaved && rawSaved.partnerPayerName && rawSaved.partnerPayerName !== 'Người ấy') ? rawSaved.partnerPayerName : 'TT',
+    activePayerMode: 'self',
+    transactions: (rawSaved && Array.isArray(rawSaved.transactions) && rawSaved.transactions.length > 0)
+      ? rawSaved.transactions.map(function(t) {
+          let p = t.payer;
+          if (p === 'Tôi' || !p) p = 'Kyle';
+          if (p === 'Người ấy') p = 'TT';
+          return Object.assign({}, t, { month: t.month || '2026-10', payer: p });
+        })
+      : SAMPLE_TRANSACTIONS
+  };
+
+  let trendChartInstance = null;
+  let pieChartInstance = null;
+  let allocationChartInstance = null;
+  let isSyncing = false;
+
+  function saveState(pushCloud) {
+    try {
+      localStorage.setItem('SMARTSPEND_STATE', JSON.stringify(state));
+    } catch (e) {}
+
+    if (pushCloud && state.syncRoom) {
+      pushDataToCloud();
+    }
+  }
+
+  // CƠ CHẾ ĐỒNG BỘ ĐÁM MÂY
+  function getCleanRoomKey() {
+    return 'sp_' + (state.syncRoom || 'default').toLowerCase().replace(/[^a-z0-9]/g, '');
+  }
+
+  async function pushDataToCloud() {
+    if (!state.syncRoom || isSyncing) return;
+    const spin = document.getElementById('syncSpinIcon');
+    if (spin) spin.classList.add('fa-spin');
+
+    const payload = {
+      room: state.syncRoom,
+      updatedAt: Date.now(),
+      transactions: state.transactions,
+      ratios: state.ratios,
+      customRules: state.customRules,
+      payer1: state.myPayerName || 'Kyle',
+      payer2: state.partnerPayerName || 'TT'
+    };
+
+    try {
+      const roomKey = getCleanRoomKey();
+      await fetch('https://json.extendsclass.com/bin/' + roomKey, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      }).catch(function() {});
+    } catch (err) {
+      console.log('Sync push error', err);
+    } finally {
+      if (spin) spin.classList.remove('fa-spin');
+    }
+  }
+
+  function mergeTransactionLists(localList, cloudList) {
+    if (!Array.isArray(cloudList) || cloudList.length === 0) return localList;
+    const map = new Map();
+
+    localList.forEach(function(tx) {
+      if (tx && tx.id) map.set(String(tx.id), tx);
+    });
+
+    cloudList.forEach(function(cloudTx) {
+      if (cloudTx && cloudTx.id) {
+        map.set(String(cloudTx.id), cloudTx);
+      }
+    });
+
+    const merged = Array.from(map.values());
+    merged.sort(function(a, b) {
+      return (b.id || 0) - (a.id || 0);
+    });
+    return merged;
+  }
+
+  async function manualSyncCloud(showAlert) {
+    if (!state.syncRoom) {
+      alert('Bạn chưa kích hoạt Mã Gia Đình Chung!\nHãy vào tab "Cài đặt" để nhập mã kết nối (ví dụ: kyle-tt-hanny).');
+      switchTab('setup');
+      return;
+    }
+
+    const spin = document.getElementById('syncSpinIcon');
+    if (spin) spin.classList.add('fa-spin');
+    isSyncing = true;
+
+    try {
+      const roomKey = getCleanRoomKey();
+      const localPayload = {
+        room: state.syncRoom,
+        updatedAt: Date.now(),
+        transactions: state.transactions,
+        ratios: state.ratios,
+        customRules: state.customRules,
+        payer1: state.myPayerName || 'Kyle',
+        payer2: state.partnerPayerName || 'TT'
+      };
+
+      let cloudData = null;
+      try {
+        const getRes = await fetch('https://json.extendsclass.com/bin/' + roomKey);
+        if (getRes.ok) {
+          cloudData = await getRes.json();
+        }
+      } catch (e) {}
+
+      if (cloudData && Array.isArray(cloudData.transactions)) {
+        state.transactions = mergeTransactionLists(state.transactions, cloudData.transactions);
+        if (cloudData.ratios) state.ratios = cloudData.ratios;
+
+        localPayload.transactions = state.transactions;
+        await fetch('https://json.extendsclass.com/bin/' + roomKey, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(localPayload)
+        }).catch(function() {});
+
+        saveState(false);
+        renderApp();
+
+        const timeStr = new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+        const lastSyncEl = document.getElementById('lastSyncTimeText');
+        if (lastSyncEl) lastSyncEl.textContent = 'Đồng bộ lúc: ' + timeStr + ' (' + state.transactions.length + ' giao dịch)';
+
+        if (showAlert) {
+          alert('Đã đồng bộ thành công!\nTổng cộng ' + state.transactions.length + ' giao dịch chung của Kyle, TT và Bé Hanny đã được cập nhật.');
+        }
+      } else {
+        await fetch('https://json.extendsclass.com/bin/' + roomKey, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Security-key': 'smartspend_pass' },
+          body: JSON.stringify(localPayload)
+        }).catch(function() {});
+
+        const timeStr = new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+        const lastSyncEl = document.getElementById('lastSyncTimeText');
+        if (lastSyncEl) lastSyncEl.textContent = 'Đã tải lên phòng gia đình lúc: ' + timeStr;
+
+        if (showAlert) {
+          alert('Đã kết nối phòng "' + state.syncRoom + '" thành công!\nTrên điện thoại của TT, hãy vào Cài đặt gõ đúng mã "' + state.syncRoom + '" rồi bấm Kết Nối để 2 máy đồng bộ.');
+        }
+      }
+    } catch (err) {
+      console.log(err);
+      if (showAlert) {
+        alert('Đã lưu dữ liệu lên phòng "' + state.syncRoom + '". Sẵn sàng đồng bộ cùng TT!');
+      }
+    } finally {
+      if (spin) spin.classList.remove('fa-spin');
+      isSyncing = false;
+    }
+  }
+
+  function enableCloudSync() {
+    const room = document.getElementById('syncRoomInput').value.trim();
+    if (!room) {
+      alert('Vui lòng nhập Mã Gia Đình Chung (ví dụ: kyle-tt-hanny)!');
+      return;
+    }
+    state.syncRoom = room.toLowerCase();
+    saveState(false);
+    updateSyncBadges();
+    manualSyncCloud(true);
+  }
+
+  function disableCloudSync() {
+    state.syncRoom = '';
+    saveState(false);
+    updateSyncBadges();
+    alert('Đã tắt đồng bộ đám mây. Ứng dụng hiện hoạt động ở chế độ riêng tư trên máy này.');
+  }
+
+  function updateSyncBadges() {
+    const badge = document.getElementById('syncStatusBadge');
+    const txt = document.getElementById('syncStatusText');
+    const cloudBadge = document.getElementById('cloudSyncStatusBadge');
+
+    if (state.syncRoom) {
+      badge.className = 'bg-amber-400 text-slate-950 badge-xs font-extrabold px-2 py-0.5 rounded-md uppercase flex items-center space-x-1';
+      txt.textContent = 'PHÒNG: ' + state.syncRoom;
+      if (cloudBadge) {
+        cloudBadge.textContent = 'ĐANG ĐỒNG BỘ: ' + state.syncRoom;
+        cloudBadge.className = 'badge-xs px-2 py-0.5 rounded-full font-bold bg-amber-400 text-slate-950';
+      }
+    } else {
+      badge.className = 'bg-emerald-400 text-slate-950 badge-xs font-extrabold px-2 py-0.5 rounded-md uppercase flex items-center space-x-1';
+      txt.textContent = 'KYLE & TT & HANNY';
+      if (cloudBadge) {
+        cloudBadge.textContent = 'Chưa bật';
+        cloudBadge.className = 'badge-xs px-2 py-0.5 rounded-full font-bold bg-slate-700 text-slate-300';
+      }
+    }
+
+    const btnSelf = document.getElementById('btnPayerSelf');
+    const btnPartner = document.getElementById('btnPayerPartner');
+    if (btnSelf) btnSelf.textContent = state.myPayerName || 'Kyle';
+    if (btnPartner) btnPartner.textContent = state.partnerPayerName || 'TT';
+
+    const optSelf = document.getElementById('optPayerSelf');
+    const optPartner = document.getElementById('optPayerPartner');
+    if (optSelf) optSelf.textContent = (state.myPayerName || 'Kyle') + ' chi';
+    if (optPartner) optPartner.textContent = (state.partnerPayerName || 'TT') + ' chi';
+
+    const currentPayerName = state.activePayerMode === 'self' ? (state.myPayerName || 'Kyle') : (state.partnerPayerName || 'TT');
+    document.getElementById('activePayerTag').textContent = 'Người chi: ' + currentPayerName;
+  }
+
+  function openRenameModal() {
+    document.getElementById('modalMyNameInput').value = state.myPayerName || 'Kyle';
+    document.getElementById('modalPartnerNameInput').value = state.partnerPayerName || 'TT';
+    document.getElementById('quickRenameModal').classList.remove('hidden');
+    document.getElementById('quickRenameModal').classList.add('flex');
+  }
+
+  function closeRenameModal() {
+    document.getElementById('quickRenameModal').classList.add('hidden');
+    document.getElementById('quickRenameModal').classList.remove('flex');
+  }
+
+  function saveNamesFromModal() {
+    const myName = document.getElementById('modalMyNameInput').value.trim() || 'Kyle';
+    const partnerName = document.getElementById('modalPartnerNameInput').value.trim() || 'TT';
+    updateAllPayerNames(myName, partnerName);
+    closeRenameModal();
+  }
+
+  function saveCustomNames() {
+    const myName = document.getElementById('setupMyNameInput').value.trim() || 'Kyle';
+    const partnerName = document.getElementById('setupPartnerNameInput').value.trim() || 'TT';
+    updateAllPayerNames(myName, partnerName);
+    alert('Đã cập nhật tên mới: "' + myName + '" & "' + partnerName + '" thành công!');
+  }
+
+  function updateAllPayerNames(newName1, newName2) {
+    const oldName1 = state.myPayerName || 'Kyle';
+    const oldName2 = state.partnerPayerName || 'TT';
+
+    state.transactions.forEach(function(t) {
+      if (t.payer === oldName1 || t.payer === 'Tôi' || t.payer === 'Kyle') {
+        t.payer = newName1;
+      } else if (t.payer === oldName2 || t.payer === 'Người ấy' || t.payer === 'TT') {
+        t.payer = newName2;
+      }
+    });
+
+    state.myPayerName = newName1;
+    state.partnerPayerName = newName2;
+    saveState(true);
+    renderApp();
+  }
+
+  function setPayer(mode) {
+    state.activePayerMode = mode;
+    const isSelf = mode === 'self';
+    document.getElementById('btnPayerSelf').className = isSelf ? 'px-3 py-1 rounded-md bg-white text-indigo-600 shadow-xs font-bold transition' : 'px-3 py-1 rounded-md text-slate-500 hover:text-slate-800 transition';
+    document.getElementById('btnPayerPartner').className = !isSelf ? 'px-3 py-1 rounded-md bg-white text-indigo-600 shadow-xs font-bold transition' : 'px-3 py-1 rounded-md text-slate-500 hover:text-slate-800 transition';
+    const currentName = isSelf ? (state.myPayerName || 'Kyle') : (state.partnerPayerName || 'TT');
+    document.getElementById('activePayerTag').textContent = 'Người chi: ' + currentName;
+  }
+
+  function initPinLock() {
+    if (state.pinCode && state.pinCode.length >= 4) {
+      const overlay = document.getElementById('pinLockOverlay');
+      overlay.classList.remove('hidden');
+      overlay.classList.add('flex');
+    }
+  }
+
+  function checkUnlockPin() {
+    const val = document.getElementById('unlockPinInput').value;
+    const err = document.getElementById('pinErrorMsg');
+    if (val === state.pinCode) {
+      const overlay = document.getElementById('pinLockOverlay');
+      overlay.classList.add('hidden');
+      overlay.classList.remove('flex');
+      err.classList.add('hidden');
+    } else if (val.length >= state.pinCode.length) {
+      err.classList.remove('hidden');
+    }
+  }
+
+  function savePinCode() {
+    const pin = document.getElementById('newPinInput').value.trim();
+    if (pin.length < 4) {
+      alert('Vui lòng nhập mã PIN từ 4 đến 6 chữ số!');
+      return;
+    }
+    state.pinCode = pin;
+    document.getElementById('newPinInput').value = '';
+    saveState(false);
+    renderSetupTab();
+    alert('Đã bật khóa Mã PIN thành công!');
+  }
+
+  function clearPinCode() {
+    state.pinCode = '';
+    saveState(false);
+    renderSetupTab();
+    alert('Đã tắt khóa Mã PIN.');
+  }
+
+  function downloadBackupJSON() {
+    const backupPayload = {
+      app: 'SmartSpendPro_KyleTT_Hanny',
+      exportedAt: new Date().toISOString(),
+      state: state
+    };
+    const jsonStr = JSON.stringify(backupPayload, null, 2);
+    const blob = new Blob([jsonStr], { type: 'application/json;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const dateTag = new Date().toISOString().slice(0, 10);
+    a.download = 'SmartSpend_GiaDinhKyleTT_' + dateTag + '.json';
+    a.click();
+  }
+
+  function restoreFromBackupJSON(event) {
+    const file = event.target.files && event.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      try {
+        const parsed = JSON.parse(e.target.result);
+        const restoredState = parsed.state ? parsed.state : parsed;
+        if (!restoredState || !Array.isArray(restoredState.transactions)) {
+          alert('File không đúng định dạng sao lưu của SmartSpend!');
+          return;
+        }
+        state = {
+          currentMonth: restoredState.currentMonth || '2026-10',
+          pinCode: restoredState.pinCode || '',
+          syncRoom: restoredState.syncRoom || '',
+          myPayerName: restoredState.myPayerName || 'Kyle',
+          partnerPayerName: restoredState.partnerPayerName || 'TT',
+          activePayerMode: 'self',
+          ratios: restoredState.ratios || { NEEDS: 60, WANTS: 20, SAVINGS: 20 },
+          customRules: Array.isArray(restoredState.customRules) ? restoredState.customRules : [],
+          transactions: restoredState.transactions
+        };
+        saveState(true);
+        renderApp();
+        switchTab('home');
+        alert('Đã khôi phục thành công ' + state.transactions.length + ' giao dịch từ file của bạn!');
+      } catch (err) {
+        alert('Không thể đọc file sao lưu. Vui lòng kiểm tra lại file .json!');
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  function formatVND(num) {
+    return Math.round(num).toLocaleString('vi-VN') + ' ₫';
+  }
+
+  function parseSmartAmount(raw) {
+    if (!raw) return 0;
+    let str = raw.toString().toLowerCase().trim().replace(/,/g, '.');
+    let multiplier = 1;
+    if (str.endsWith('k')) {
+      multiplier = 1000;
+      str = str.slice(0, -1);
+    } else if (str.endsWith('tr') || str.endsWith('m')) {
+      multiplier = 1000000;
+      str = str.replace(/tr|m/g, '');
+    } else {
+      str = str.replace(/\./g, '');
+    }
+    const val = parseFloat(str);
+    return isNaN(val) ? 0 : Math.round(val * multiplier);
+  }
+
+  function classifyItem(name) {
+    const lower = name.toLowerCase().trim();
+
+    for (let i = 0; i < state.customRules.length; i++) {
+      const cRule = state.customRules[i];
+      if (lower.includes(cRule.keyword.toLowerCase())) {
+        return {
+          type: cRule.bucket === 'INCOME' ? 'INCOME' : 'EXPENSE',
+          bucket: cRule.bucket,
+          category: 'Tùy chỉnh (' + cRule.keyword + ')',
+          icon: cRule.bucket === 'INCOME' ? 'fa-sack-dollar' : 'fa-tag'
+        };
+      }
+    }
+
+    for (const rule of DEFAULT_RULES) {
+      for (const kw of rule.keywords) {
+        if (lower.includes(kw)) return rule;
+      }
+    }
+
+    return { type: 'EXPENSE', bucket: 'WANTS', category: 'Chi tiêu linh hoạt khác', icon: 'fa-receipt' };
+  }
+
+  function previewAllocation() {
+    const name = document.getElementById('itemName').value;
+    const rawAmount = document.getElementById('itemAmount').value;
+    const tag = document.getElementById('livePreviewTag');
+
+    if (!name.trim()) {
+      tag.textContent = 'Gõ để tự phân loại...';
+      tag.className = 'text-11 font-medium px-2 py-0.5 rounded-md bg-slate-100 text-slate-500 truncate max-w-[230px]';
+      return;
+    }
+
+    const matched = classifyItem(name);
+    const amount = parseSmartAmount(rawAmount);
+    const amountText = amount > 0 ? (' • ' + formatVND(amount)) : '';
+    const bucketMap = {
+      INCOME: 'Chia 3 Hũ (' + state.ratios.NEEDS + '/' + state.ratios.WANTS + '/' + state.ratios.SAVINGS + ')',
+      NEEDS: 'Hũ Thiết Yếu (Ăn ở, Bé Hanny)',
+      WANTS: 'Hũ Linh Hoạt',
+      SAVINGS: 'Hũ Tiết Kiệm'
+    };
+
+    tag.innerHTML = '<i class="fa-solid ' + matched.icon + ' mr-1"></i>' + matched.category + ' → <b>' + bucketMap[matched.bucket] + '</b>' + amountText;
+    tag.className = 'text-11 font-medium px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 truncate max-w-[230px]';
+  }
+
+  function handleQuickSubmit(e) {
+    e.preventDefault();
+    const nameInput = document.getElementById('itemName');
+    const amountInput = document.getElementById('itemAmount');
+    const name = nameInput.value.trim();
+    const amount = parseSmartAmount(amountInput.value);
+
+    if (!name || amount <= 0) {
+      alert('Vui lòng nhập tên khoản thu/chi và số tiền hợp lệ (VD: 450k, 1.5tr, 55000).');
+      return;
+    }
+
+    const matched = classifyItem(name);
+    const now = new Date();
+    const [curY, curM] = state.currentMonth.split('-');
+    const timeStr = String(now.getDate()).padStart(2, '0') + '/' + curM + ', ' + String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
+    const payerName = state.activePayerMode === 'self' ? (state.myPayerName || 'Kyle') : (state.partnerPayerName || 'TT');
+
+    const uniqueId = Date.now() + Math.floor(Math.random() * 1000);
+
+    state.transactions.unshift({
+      id: uniqueId,
+      name: name,
+      amount: amount,
+      payer: payerName,
+      type: matched.type,
+      bucket: matched.bucket,
+      category: matched.category,
+      icon: matched.icon,
+      month: state.currentMonth,
+      timestamp: timeStr
+    });
+
+    saveState(true);
+    nameInput.value = '';
+    amountInput.value = '';
+    previewAllocation();
+    renderApp();
+  }
+
+  function deleteTransaction(id) {
+    if (confirm('Xóa khoản giao dịch này?')) {
+      state.transactions = state.transactions.filter(function(t) { return t.id !== id; });
+      saveState(true);
+      renderApp();
+    }
+  }
+
+  function changeMonth(delta) {
+    const [yStr, mStr] = state.currentMonth.split('-');
+    let year = parseInt(yStr, 10);
+    let month = parseInt(mStr, 10) + delta;
+    if (month > 12) { month = 1; year++; }
+    if (month < 1) { month = 12; year--; }
+    state.currentMonth = year + '-' + String(month).padStart(2, '0');
+    saveState(false);
+    renderApp();
+  }
+
+  function switchTab(tabName) {
+    const tabs = ['home', 'reports', 'allocation', 'setup'];
+    for (let i = 0; i < tabs.length; i++) {
+      const t = tabs[i];
+      const sec = document.getElementById('tab-' + t);
+      if (sec) sec.classList.toggle('active', t === tabName);
+
+      const navBtn = document.getElementById('nav-' + t);
+      if (navBtn) {
+        navBtn.className = (t === tabName)
+          ? 'flex flex-col items-center text-indigo-600 font-bold py-1.5 px-3 rounded-xl bg-indigo-50/80'
+          : 'flex flex-col items-center text-slate-400 font-medium py-1.5 px-3 rounded-xl hover:text-indigo-600';
+      }
+
+      const topBtn = document.getElementById('top-' + t);
+      if (topBtn) {
+        topBtn.className = (t === tabName)
+          ? 'py-1.5 rounded-xl font-bold bg-white text-indigo-700 shadow-xs transition'
+          : 'py-1.5 rounded-xl font-medium text-indigo-100 hover:bg-white/10 transition';
+      }
+    }
+    renderApp();
+  }
+
+  function renderApp() {
+    const [yStr, mStr] = state.currentMonth.split('-');
+    document.getElementById('currentMonthLabel').textContent = 'Tháng ' + mStr + '/' + yStr;
+
+    updateSyncBadges();
+
+    const monthTx = state.transactions.filter(function(t) { return (t.month || '2026-10') === state.currentMonth; });
+    const totalIncome = monthTx.filter(function(t) { return t.type === 'INCOME'; }).reduce(function(s, t) { return s + t.amount; }, 0);
+    const totalExpense = monthTx.filter(function(t) { return t.type === 'EXPENSE'; }).reduce(function(s, t) { return s + t.amount; }, 0);
+    const balance = totalIncome - totalExpense;
+    const savingSpent = monthTx.filter(function(t) { return t.bucket === 'SAVINGS'; }).reduce(function(s, t) { return s + t.amount; }, 0);
+    const savingRate = totalIncome > 0 ? Math.round(((Math.max(0, balance) + savingSpent) / totalIncome) * 100) : 0;
+
+    document.getElementById('totalBalance').textContent = formatVND(balance);
+    document.getElementById('totalIncome').textContent = formatVND(totalIncome);
+    document.getElementById('totalExpense').textContent = formatVND(totalExpense);
+    document.getElementById('savingRateLabel').textContent = savingRate + '%';
+    document.getElementById('allocationRatioBadge').textContent = 'Quy tắc: ' + state.ratios.NEEDS + '/' + state.ratios.WANTS + '/' + state.ratios.SAVINGS;
+
+    const bucketDefs = [
+      { key: 'NEEDS', name: 'Hũ Thiết Yếu (Ăn ở, Bé Hanny, Hóa đơn)', ratio: state.ratios.NEEDS, bar: 'bg-blue-600', badge: 'bg-blue-50 text-blue-700' },
+      { key: 'WANTS', name: 'Hũ Linh Hoạt (Cafe, Mua sắm, Giải trí)', ratio: state.ratios.WANTS, bar: 'bg-purple-600', badge: 'bg-purple-50 text-purple-700' },
+      { key: 'SAVINGS', name: 'Hũ Tiết Kiệm & Đầu Tư Tương Lai', ratio: state.ratios.SAVINGS, bar: 'bg-amber-500', badge: 'bg-amber-50 text-amber-700' }
+    ];
+
+    document.getElementById('bucketsContainer').innerHTML = bucketDefs.map(function(b) {
+      const allocated = Math.round((totalIncome * b.ratio) / 100);
+      const spent = monthTx.filter(function(t) { return t.type === 'EXPENSE' && t.bucket === b.key; }).reduce(function(s, t) { return s + t.amount; }, 0);
+      const remaining = allocated - spent;
+      const pct = allocated > 0 ? Math.min(100, Math.round((spent / allocated) * 100)) : (spent > 0 ? 100 : 0);
+      const over = remaining < 0;
+
+      return '<div class="bg-slate-50 rounded-2xl p-3.5 border border-slate-100">' +
+        '<div class="flex justify-between items-center mb-1">' +
+          '<div class="flex items-center space-x-2">' +
+            '<span class="text-xs font-bold px-2 py-0.5 rounded-md ' + b.badge + '">' + b.ratio + '%</span>' +
+            '<span class="text-xs font-semibold text-slate-700">' + b.name + '</span>' +
+          '</div>' +
+          '<span class="text-xs font-bold ' + (over ? 'text-rose-600' : 'text-slate-800') + '">' +
+            (over ? 'Vượt: ' + formatVND(Math.abs(remaining)) : 'Còn: ' + formatVND(remaining)) +
+          '</span>' +
+        '</div>' +
+        '<div class="w-full bg-slate-200 h-2 rounded-full overflow-hidden my-1.5">' +
+          '<div class="' + (over ? 'bg-rose-500' : b.bar) + ' h-full transition-all duration-300" style="width: ' + pct + '%"></div>' +
+        '</div>' +
+        '<div class="flex justify-between text-11 text-slate-400">' +
+          '<span>Đã dùng: ' + formatVND(spent) + ' (' + pct + '%)</span>' +
+          '<span>Định mức: ' + formatVND(allocated) + '</span>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+
+    const filterBucket = document.getElementById('filterBucket').value;
+    const filterPayer = document.getElementById('filterPayer').value;
+    const searchEl = document.getElementById('searchTx');
+    const keyword = (searchEl ? searchEl.value : '').toLowerCase().trim();
+
+    const myName = state.myPayerName || 'Kyle';
+    const partnerName = state.partnerPayerName || 'TT';
+
+    const filteredTx = monthTx.filter(function(t) {
+      const matchB = filterBucket === 'ALL' ? true : t.bucket === filterBucket;
+      let matchP = true;
+      if (filterPayer === 'SELF') matchP = (t.payer === myName || t.payer === 'Tôi' || t.payer === 'Kyle');
+      else if (filterPayer === 'PARTNER') matchP = (t.payer === partnerName || t.payer === 'Người ấy' || t.payer === 'TT');
+
+      const matchK = !keyword || t.name.toLowerCase().includes(keyword) || t.category.toLowerCase().includes(keyword) || (t.payer || '').toLowerCase().includes(keyword);
+      return matchB && matchP && matchK;
+    });
+
+    const bTags = {
+      NEEDS: { text: 'Thiết Yếu', cls: 'bg-blue-50 text-blue-600' },
+      WANTS: { text: 'Linh Hoạt', cls: 'bg-purple-50 text-purple-600' },
+      SAVINGS: { text: 'Tiết Kiệm', cls: 'bg-amber-50 text-amber-700' },
+      INCOME: { text: 'Tự chia 3 Hũ', cls: 'bg-emerald-50 text-emerald-600' }
+    };
+
+    document.getElementById('transactionList').innerHTML = filteredTx.length === 0
+      ? '<div class="text-center py-8 text-slate-400 text-xs">Chưa có giao dịch nào trong tháng này. Hãy nhập khoản thu/chi ở ô phía trên!</div>'
+      : filteredTx.map(function(t) {
+          const isInc = t.type === 'INCOME';
+          const tag = bTags[t.bucket] || bTags.WANTS;
+          const payerLabel = t.payer ? t.payer : myName;
+          const isPartner = payerLabel === partnerName;
+          const isBaby = t.category === 'Bé Hanny';
+
+          return '<div class="flex items-center justify-between bg-slate-50/70 hover:bg-slate-50 p-3 rounded-2xl border border-slate-100 transition">' +
+            '<div class="flex items-center space-x-3">' +
+              '<div class="w-9 h-9 rounded-xl ' + (isInc ? 'bg-emerald-100 text-emerald-600' : (isBaby ? 'bg-pink-100 text-pink-600' : 'bg-indigo-100 text-indigo-600')) + ' flex items-center justify-center shrink-0">' +
+                '<i class="fa-solid ' + t.icon + ' text-sm"></i>' +
+              '</div>' +
+              '<div>' +
+                '<p class="text-xs font-bold text-slate-800">' + t.name + '</p>' +
+                '<div class="flex items-center space-x-1.5 mt-0.5">' +
+                  '<span class="badge-xs font-bold px-1.5 py-0.5 rounded ' + (isPartner ? 'bg-purple-100 text-purple-800' : 'bg-indigo-100 text-indigo-800') + '">' + payerLabel + '</span>' +
+                  '<span class="badge-xs font-semibold px-1.5 py-0.5 rounded ' + (isBaby ? 'bg-pink-50 text-pink-700 font-bold' : tag.cls) + '">' + (isBaby ? 'Bé Hanny' : tag.text) + '</span>' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+            '<div class="text-right flex items-center space-x-2">' +
+              '<div>' +
+                '<p class="text-xs font-extrabold ' + (isInc ? 'text-emerald-600' : 'text-slate-800') + '">' +
+                  (isInc ? '+' : '-') + formatVND(t.amount) +
+                '</p>' +
+                '<p class="badge-xs text-slate-400">' + t.timestamp + '</p>' +
+              '</div>' +
+              '<button type="button" onclick="deleteTransaction(' + t.id + ')" class="text-slate-300 hover:text-rose-500 p-1">' +
+                '<i class="fa-solid fa-trash-can text-xs"></i>' +
+              '</button>' +
+            '</div>' +
+          '</div>';
+        }).join('');
+
+    renderReportsTab(monthTx, totalExpense, totalIncome);
+    renderAllocationTab(monthTx, totalIncome, bucketDefs);
+    renderSetupTab();
+  }
+
+  function renderReportsTab(monthTx, totalExpense, totalIncome) {
+    document.getElementById('avgDailySpend').textContent = formatVND(totalExpense / 30);
+
+    const payer1 = state.myPayerName || 'Kyle';
+    const payer2 = state.partnerPayerName || 'TT';
+    const p1Expense = monthTx.filter(function(t) { return t.type === 'EXPENSE' && (t.payer === payer1 || t.payer === 'Kyle' || t.payer === 'Tôi'); }).reduce(function(s, t) { return s + t.amount; }, 0);
+    const p2Expense = monthTx.filter(function(t) { return t.type === 'EXPENSE' && (t.payer === payer2 || t.payer === 'TT' || t.payer === 'Người ấy'); }).reduce(function(s, t) { return s + t.amount; }, 0);
+    const p1Pct = totalExpense > 0 ? Math.round((p1Expense / totalExpense) * 100) : 50;
+    const p2Pct = totalExpense > 0 ? (100 - p1Pct) : 50;
+
+    document.getElementById('payerComparisonBox').innerHTML =
+      '<div class="flex justify-between items-center mb-1 font-semibold">' +
+        '<span class="text-indigo-700 font-bold">' + payer1 + ': ' + formatVND(p1Expense) + ' (' + p1Pct + '%)</span>' +
+        '<span class="text-purple-700 font-bold">' + payer2 + ': ' + formatVND(p2Expense) + ' (' + p2Pct + '%)</span>' +
+      '</div>' +
+      '<div class="w-full bg-purple-200 h-2.5 rounded-full overflow-hidden flex">' +
+        '<div class="bg-indigo-600 h-full transition-all" style="width: ' + p1Pct + '%" title="' + payer1 + '"></div>' +
+        '<div class="bg-purple-500 h-full transition-all" style="width: ' + p2Pct + '%" title="' + payer2 + '"></div>' +
+      '</div>';
+
+    const catTotals = {};
+    monthTx.filter(function(t) { return t.type === 'EXPENSE'; }).forEach(function(t) {
+      catTotals[t.category] = (catTotals[t.category] || 0) + t.amount;
+    });
+
+    const sortedCats = Object.entries(catTotals).sort(function(entryA, entryB) {
+      const [nameA, valA] = entryA;
+      const [nameB, valB] = entryB;
+      return valB - valA;
+    });
+
+    if (sortedCats.length > 0) {
+      const [topName, topAmt] = sortedCats[0];
+      document.getElementById('topCategoryLabel').textContent = topName + ' (' + formatVND(topAmt) + ')';
+    } else {
+      document.getElementById('topCategoryLabel').textContent = 'Chưa có chi tiêu';
+    }
+
+    document.getElementById('categoryBreakdownList').innerHTML = sortedCats.length === 0
+      ? '<p class="text-xs text-slate-400 text-center py-2">Chưa có dữ liệu chi tiêu trong tháng này.</p>'
+      : sortedCats.map(function(entry) {
+          const [cat, amt] = entry;
+          const pct = totalExpense > 0 ? Math.round((amt / totalExpense) * 100) : 0;
+          const isBabyCat = cat === 'Bé Hanny';
+          return '<div class="flex justify-between items-center text-xs p-1.5 rounded-xl ' + (isBabyCat ? 'bg-pink-50/70 border border-pink-100' : '') + '">' +
+            '<span class="font-medium ' + (isBabyCat ? 'text-pink-800 font-bold flex items-center space-x-1' : 'text-slate-700') + '">' +
+              (isBabyCat ? '<i class="fa-solid fa-baby mr-1 text-pink-600"></i>' : '') + cat +
+            '</span>' +
+            '<div class="flex items-center space-x-2">' +
+              '<span class="text-11 ' + (isBabyCat ? 'bg-pink-200 text-pink-800' : 'bg-slate-100 text-slate-600') + ' px-2 py-0.5 rounded-md font-semibold">' + pct + '%</span>' +
+              '<span class="font-bold text-slate-800">' + formatVND(amt) + '</span>' +
+            '</div>' +
+          '</div>';
+        }).join('');
+
+    if (typeof Chart === 'undefined') return;
+
+    const monthsList = ['2026-05', '2026-06', '2026-07', '2026-08', '2026-09', '2026-10'];
+    const incData = monthsList.map(function(m) {
+      return state.transactions.filter(function(t) { return (t.month || '2026-10') === m && t.type === 'INCOME'; }).reduce(function(s, t) { return s + t.amount; }, 0) / 1000000;
+    });
+    const expData = monthsList.map(function(m) {
+      return state.transactions.filter(function(t) { return (t.month || '2026-10') === m && t.type === 'EXPENSE'; }).reduce(function(s, t) { return s + t.amount; }, 0) / 1000000;
+    });
+
+    const ctxTrend = document.getElementById('monthlyTrendChart');
+    if (ctxTrend) {
+      if (trendChartInstance) trendChartInstance.destroy();
+      trendChartInstance = new Chart(ctxTrend, {
+        type: 'bar',
+        data: {
+          labels: ['T5', 'T6', 'T7', 'T8', 'T9', 'T10'],
+          datasets: [
+            { label: 'Tổng Thu (Tr ₫)', data: incData, backgroundColor: '#10b981', borderRadius: 6 },
+            { label: 'Tổng Chi (Tr ₫)', data: expData, backgroundColor: '#f43f5e', borderRadius: 6 }
+          ]
+        },
+        options: { responsive: true, maintainAspectRatio: false }
+      });
+    }
+
+    const ctxPie = document.getElementById('categoryPieChart');
+    if (ctxPie) {
+      if (pieChartInstance) pieChartInstance.destroy();
+      const pieLabels = sortedCats.length > 0 ? sortedCats.map(function(c) { return c[0]; }) : ['Chưa có'];
+      const pieValues = sortedCats.length > 0 ? sortedCats.map(function(c) { const [k, v] = c; return v; }) : [100];
+
+      pieChartInstance = new Chart(ctxPie, {
+        type: 'doughnut',
+        data: {
+          labels: pieLabels,
+          datasets: [{
+            data: pieValues,
+            backgroundColor: ['#ec4899', '#4f46e5', '#f59e0b', '#10b981', '#9333ea', '#06b6d4', '#64748b']
+          }]
+        },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right' } } }
+      });
+    }
+  }
+
+  function renderAllocationTab(monthTx, totalIncome, bucketDefs) {
+    const allocatedArr = bucketDefs.map(function(b) { return Math.round((totalIncome * b.ratio) / 100) / 1000000; });
+    const spentArr = bucketDefs.map(function(b) {
+      return monthTx.filter(function(t) { return t.type === 'EXPENSE' && t.bucket === b.key; }).reduce(function(s, t) { return s + t.amount; }, 0) / 1000000;
+    });
+
+    if (typeof Chart !== 'undefined') {
+      const ctxAlloc = document.getElementById('allocationCompareChart');
+      if (ctxAlloc) {
+        if (allocationChartInstance) allocationChartInstance.destroy();
+        allocationChartInstance = new Chart(ctxAlloc, {
+          type: 'bar',
+          data: {
+            labels: ['Thiết yếu (Bé Hanny)', 'Linh hoạt', 'Tiết kiệm'],
+            datasets: [
+              { label: 'Định mức phân bổ (Tr ₫)', data: allocatedArr, backgroundColor: '#cbd5e1', borderRadius: 6 },
+              { label: 'Thực tế đã dùng (Tr ₫)', data: spentArr, backgroundColor: ['#2563eb', '#9333ea', '#f59e0b'], borderRadius: 6 }
+            ]
+          },
+          options: { responsive: true, maintainAspectRatio: false }
+        });
+      }
+    }
+
+    const daysLeft = 15;
+    document.getElementById('allocationSafeDailyList').innerHTML = bucketDefs.map(function(b) {
+      const allocated = Math.round((totalIncome * b.ratio) / 100);
+      const spent = monthTx.filter(function(t) { return t.type === 'EXPENSE' && t.bucket === b.key; }).reduce(function(s, t) { return s + t.amount; }, 0);
+      const rem = Math.max(0, allocated - spent);
+      const safeDaily = Math.round(rem / daysLeft);
+      return '<div class="flex justify-between items-center bg-slate-50 p-3 rounded-xl border border-slate-100 text-xs">' +
+        '<div>' +
+          '<p class="font-bold text-slate-700">' + b.name + '</p>' +
+          '<p class="text-11 text-slate-400">Ngân sách còn lại: ' + formatVND(rem) + '</p>' +
+        '</div>' +
+        '<div class="text-right">' +
+          '<span class="text-xs font-extrabold text-indigo-600">' + formatVND(safeDaily) + '/ngày</span>' +
+          '<p class="text-11 text-slate-400">còn ' + daysLeft + ' ngày</p>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+
+    const wantsAlloc = Math.round((totalIncome * state.ratios.WANTS) / 100);
+    const wantsSpent = monthTx.filter(function(t) { return t.type === 'EXPENSE' && t.bucket === 'WANTS'; }).reduce(function(s, t) { return s + t.amount; }, 0);
+    const adviceEl = document.getElementById('aiAllocationAdvice');
+    if (adviceEl) {
+      if (wantsSpent > wantsAlloc) {
+        adviceEl.innerHTML = '<b class="text-rose-600">Cảnh báo:</b> Hũ Linh Hoạt đã vượt hạn mức định mức. Kyle & TT nên ưu tiên các khoản bỉm sữa, học phí cho bé Hanny trong nửa tháng còn lại.';
+      } else {
+        adviceEl.innerHTML = '<b class="text-emerald-600">Tốt lắm!</b> Tỷ lệ phân bổ ngân sách gia đình đang rất ổn định. Chi phí cho bé Hanny và sinh hoạt thiết yếu được cân đối tốt.';
+      }
+    }
+  }
+
+  function renderSetupTab() {
+    document.getElementById('setupRatioNeeds').value = state.ratios.NEEDS;
+    document.getElementById('setupRatioWants').value = state.ratios.WANTS;
+    document.getElementById('setupRatioSavings').value = state.ratios.SAVINGS;
+    document.getElementById('setupMyNameInput').value = state.myPayerName || 'Kyle';
+    document.getElementById('setupPartnerNameInput').value = state.partnerPayerName || 'TT';
+    document.getElementById('syncRoomInput').value = state.syncRoom || '';
+
+    const pinBadge = document.getElementById('pinStatusBadge');
+    if (pinBadge) {
+      if (state.pinCode && state.pinCode.length >= 4) {
+        pinBadge.textContent = 'Đang BẬT PIN';
+        pinBadge.className = 'badge-xs font-bold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800';
+      } else {
+        pinBadge.textContent = 'Đang tắt';
+        pinBadge.className = 'badge-xs font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-500';
+      }
+    }
+
+    const rulesList = document.getElementById('customRulesList');
+    if (rulesList) {
+      rulesList.innerHTML = state.customRules.length === 0
+        ? '<span class="text-xs text-slate-400">Chưa có từ khóa riêng nào.</span>'
+        : state.customRules.map(function(r, idx) {
+            return '<span class="badge-xs bg-slate-100 text-slate-700 px-2.5 py-1 rounded-lg border border-slate-200 flex items-center space-x-1.5">' +
+              '<span>' + r.keyword + ' → ' + r.bucket + '</span>' +
+              '<button type="button" onclick="deleteCustomRule(' + idx + ')" class="text-slate-400 hover:text-rose-500 font-bold ml-1">×</button>' +
+            '</span>';
+          }).join('');
+    }
+  }
+
+  function applyPresetRatio(n, w, s) {
+    state.ratios = { NEEDS: n, WANTS: w, SAVINGS: s };
+    saveState(true);
+    renderApp();
+    alert('Đã áp dụng công thức phân bổ ' + n + '/' + w + '/' + s + '!');
+  }
+
+  function saveCustomRatios() {
+    const n = parseInt(document.getElementById('setupRatioNeeds').value, 10) || 0;
+    const w = parseInt(document.getElementById('setupRatioWants').value, 10) || 0;
+    const s = parseInt(document.getElementById('setupRatioSavings').value, 10) || 0;
+
+    if (n + w + s !== 100) {
+      alert('Tổng 3 hũ phải đúng bằng 100% (Hiện tại: ' + (n + w + s) + '%)!');
+      return;
+    }
+    state.ratios = { NEEDS: n, WANTS: w, SAVINGS: s };
+    saveState(true);
+    renderApp();
+    alert('Đã lưu tỷ lệ phân bổ ngân sách mới thành công!');
+  }
+
+  function addCustomKeywordRule() {
+    const kwInput = document.getElementById('customKeywordInput');
+    const bucket = document.getElementById('customKeywordBucket').value;
+    const kw = kwInput.value.trim().toLowerCase();
+
+    if (!kw) {
+      alert('Vui lòng nhập từ khóa!');
+      return;
+    }
+    state.customRules.push({ keyword: kw, bucket: bucket });
+    saveState(true);
+    kwInput.value = '';
+    renderSetupTab();
+  }
+
+  function deleteCustomRule(idx) {
+    state.customRules.splice(idx, 1);
+    saveState(true);
+    renderSetupTab();
+  }
+
+  function openSafeResetModal() {
+    document.getElementById('confirmResetInput').value = '';
+    document.getElementById('confirmResetBtn').disabled = true;
+    document.getElementById('confirmResetBtn').classList.add('opacity-40', 'cursor-not-allowed');
+    document.getElementById('safeResetModal').classList.remove('hidden');
+    document.getElementById('safeResetModal').classList.add('flex');
+  }
+
+  function closeSafeResetModal() {
+    document.getElementById('safeResetModal').classList.add('hidden');
+    document.getElementById('safeResetModal').classList.remove('flex');
+  }
+
+  function checkResetInput() {
+    const val = document.getElementById('confirmResetInput').value.trim().toUpperCase();
+    const btn = document.getElementById('confirmResetBtn');
+    if (val === 'XOA') {
+      btn.disabled = false;
+      btn.classList.remove('opacity-40', 'cursor-not-allowed');
+    } else {
+      btn.disabled = true;
+      btn.classList.add('opacity-40', 'cursor-not-allowed');
+    }
+  }
+
+  function executeFullReset() {
+    state.transactions = [];
+    saveState(true);
+    closeSafeResetModal();
+    renderApp();
+    switchTab('home');
+    alert('Toàn bộ sổ thu chi đã được xóa sạch về 0 ₫ để bắt đầu lại!');
+  }
+
+  function loadDemoData() {
+    if (confirm('Nạp lại dữ liệu mẫu của gia đình Kyle, TT & Bé Hanny?')) {
+      state.transactions = SAMPLE_TRANSACTIONS.slice();
+      saveState(true);
+      renderApp();
+      switchTab('home');
+    }
+  }
+
+  function exportCSV() {
+    let csv = '\uFEFFMã GD,Ngày Giờ,Tên Khoản Chi,Số Tiền,Người Chi,Loại,Hũ Ngân Sách,Danh Mục\n';
+    state.transactions.forEach(function(t) {
+      csv += [
+        t.id,
+        '"' + t.timestamp + '"',
+        '"' + t.name.replace(/"/g, '""') + '"',
+        t.amount,
+        '"' + (t.payer || 'Kyle') + '"',
+        t.type,
+        t.bucket,
+        '"' + t.category + '"'
+      ].join(',') + '\n';
+    });
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'ThuChi_GiaDinh_KyleTT_' + state.currentMonth + '.csv';
+    a.click();
+  }
+
+  // Khởi chạy khi mở ứng dụng
+  initPinLock();
+  updateSyncBadges();
+  renderApp();
+</script>
+</body>
+</html>
